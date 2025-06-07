@@ -1,81 +1,91 @@
 import numpy as np
-import pandas as pd
-from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score, mean_squared_error
-import statsmodels.api as sm
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score
 
-# Set random seed for reproducibility
-np.random.seed(42)
+# Data from Tables 3.1–3.6
+data = [
+    # Distance 1.4 m
+    [8, 10, 1.4, 1.4, 5.2], [8, 10, 1.53, 1.4, 2.94], [8, 10, 1.7, 1.4, 0.325],
+    [8, 10, 2.0, 1.4, 0.001275], [8, 10, 2.3, 1.4, 0], [8, 10, 2.5, 1.4, 0],
+    # Distance 1.8 m
+    [8, 10, 1.4, 1.8, 6.47], [8, 10, 1.53, 1.8, 3.85574], [8, 10, 1.7, 1.8, 1.24537],
+    [8, 10, 2.0, 1.8, 0.28144], [8, 10, 2.3, 1.8, 0], [8, 10, 2.5, 1.8, -0.0345],
+    # Distance 2.0 m
+    [8, 10, 1.4, 2.0, 6.68], [8, 10, 1.53, 2.0, 3.916], [8, 10, 1.7, 2.0, 1.28],
+    [8, 10, 2.0, 2.0, 0.00225], [8, 10, 2.3, 2.0, 0], [8, 10, 2.5, 2.0, 0],
+    # Distance 2.2 m
+    [8, 10, 1.4, 2.2, 6.9], [8, 10, 1.53, 2.2, 4.69872], [8, 10, 1.7, 2.2, 1.571955],
+    [8, 10, 2.0, 2.2, 0.070947], [8, 10, 2.3, 2.2, 0.042248], [8, 10, 2.5, 2.2, 0.026561],
+    # Distance 2.4 m
+    [8, 10, 1.4, 2.4, 7.35], [8, 10, 1.53, 2.4, 5.035], [8, 10, 1.7, 2.4, 1.8],
+    [8, 10, 2.0, 2.4, 0.084], [8, 10, 2.3, 2.4, 0.04875], [8, 10, 2.5, 2.4, 0.0303],
+    # Distance 2.6 m
+    [8, 10, 1.4, 2.6, 7.81], [8, 10, 1.53, 2.6, 5.35], [8, 10, 1.7, 2.6, 2.0475],
+    [8, 10, 2.0, 2.6, 0.098], [8, 10, 2.3, 2.6, 0.06], [8, 10, 2.5, 2.6, 0.0357]
+]
 
-# Generate synthetic dataset
-n_no_obstacle = 54
-n_obstacle = 6
-total_samples = n_no_obstacle + n_obstacle
+# Prepare data
+X = np.array([[row[0], row[1], row[2], row[3]] for row in data])  # Wind speed, AoA, height, distance
+y = np.array([row[4] for row in data])  # Power output
 
-# Define feature ranges
-wind_speed = np.random.uniform(2, 10, total_samples)  # 2–10 m/s
-aoa = np.random.uniform(0, 25, total_samples)  # 0–25°
-obstacle_height = np.concatenate([np.zeros(n_no_obstacle), np.array([1.4, 1.53, 1.7, 2.0, 2.3, 2.5])])  # 0 for no-obstacle, 1.4–2.5 m
-obstacle_distance = np.random.uniform(1.9, 2.1, total_samples)  # 1.9–2.1 m to avoid multicollinearity
+# Feature scaling
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-# Generate synthetic power output
-power_output = np.zeros(total_samples)
-for i in range(total_samples):
-    if obstacle_height[i] == 0:  # No-obstacle
-        power_output[i] = 4.5 * wind_speed[i] + 0.5 * aoa[i] + np.random.normal(0, 2)  # ~37.961 W
-    else:  # Obstacle
-        power_output[i] = 6.470 - (6.470 + 0.068) * (obstacle_height[i] - 1.4) / (2.5 - 1.4) + np.random.normal(0, 0.5)
-
-# Create DataFrame
-data = pd.DataFrame({
-    'wind_speed': wind_speed,
-    'AoA': aoa,
-    'obstacle_height': obstacle_height,
-    'obstacle_distance': obstacle_distance,
-    'power_output': power_output
-})
-
-# Define features and target
-X = data[['wind_speed', 'AoA', 'obstacle_height', 'obstacle_distance']]
-y = data['power_output']
-
-# Split dataset: 80% training, 20% testing
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Initialize and train the model
+# Train linear regression model
 model = LinearRegression()
-model.fit(X_train, y_train)
+model.fit(X_scaled, y)
 
-# Predict on test set
-y_pred = model.predict(X_test)
+# Predict and evaluate
+y_pred = model.predict(X_scaled)
+r2 = r2_score(y, y_pred)
 
-# Evaluate performance
-r2 = r2_score(y_test, y_pred)
-rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+# Print model details
+print("Multiple Linear Regression Model for VAWT Power Output")
+print("Coefficients (wind speed, AoA, height, distance):", model.coef_)
+print("Intercept:", model.intercept_)
+print("R² Score:", r2)
 
-# 5-fold cross-validation
-cv_r2 = cross_val_score(model, X, y, cv=5, scoring='r2').mean()
 
-# Calculate p-values using statsmodels
-X_train_sm = sm.add_constant(X_train)  # Add intercept
-model_sm = sm.OLS(y_train, X_train_sm).fit()
-p_values = model_sm.pvalues[1:]  # Exclude intercept
+# Function to predict power output
+def predict_power(wind_speed, aoa, height, distance):
+    try:
+        wind_speed = float(wind_speed)
+        aoa = float(aoa)
+        height = float(height)
+        distance = float(distance)
 
-# Debug: Check p_values length
-print(f"Number of features: {len(X.columns)}")
-print(f"Number of p-values: {len(p_values)}")
-print(f"p-values: {p_values}")
+        # Input validation with warnings for extrapolation
+        if not (2 <= wind_speed <= 10):
+            print("Warning: Wind speed outside simulation range (2–10 m/s). Prediction may be less accurate.")
+        if not (0 <= aoa <= 25):
+            print("Warning: AoA outside simulation range (0–25°). Prediction may be less accurate.")
+        if not (1.4 <= height <= 2.5):
+            print("Warning: Obstacle height outside simulation range (1.4–2.5 m). Prediction may be less accurate.")
+        if not (1.4 <= distance <= 2.6):
+            print("Warning: Distance outside simulation range (1.4–2.6 m). Prediction may be less accurate.")
 
-# Print results
-print("\nMultiple Linear Regression Results:")
-print(f"R² (Test Set): {r2:.4f}")
-print(f"RMSE (Test Set): {rmse:.4f} W")
-print(f"Cross-Validated R² (5-fold): {cv_r2:.4f}")
-print("\nRegression Coefficients:")
-print(f"Intercept (β₀): {model.intercept_:.4f}")
-for i, col in enumerate(X.columns):
-    if i < len(p_values):  # Ensure index is within p_values bounds
-        print(f"{col} (β_{i+1}): {model.coef_[i]:.4f}, p-value: {p_values.iloc[i]:.4f}")
+        input_data = np.array([[wind_speed, aoa, height, distance]])
+        input_scaled = scaler.transform(input_data)
+        power = model.predict(input_scaled)[0]
+        return power
+    except ValueError:
+        return "Error: Please enter valid numeric values."
+
+
+# Interactive input loop
+while True:
+    print("\nEnter parameters to predict VAWT power output (or type 'exit' to quit):")
+    wind_speed = input("Wind speed (m/s, e.g., 8): ")
+    if wind_speed.lower() == 'exit':
+        break
+    aoa = input("Angle of attack (degrees, e.g., 10): ")
+    height = input("Obstacle height (m, e.g., 1.7): ")
+    distance = input("Horizontal distance (m, e.g., 4.0): ")
+
+    power = predict_power(wind_speed, aoa, height, distance)
+    if isinstance(power, str):
+        print(power)
     else:
-        print(f"{col} (β_{i+1}): {model.coef_[i]:.4f}, p-value: Not available")
+        print(f"Predicted power output: {power:.3f} W")
